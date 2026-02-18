@@ -32,12 +32,12 @@ class Settings(BaseSettings):
     ELEVENLABS_API_KEY: Optional[str] = None
     ELEVENLABS_DEFAULT_TURKISH_VOICE_ID: str = "21m00Tcm4TlvDq8ikWAM"  # Default Turkish voice
     
-    # File Paths
-    DATASETS_DIR: str = "/datasets"
-    LORA_STORAGE_DIR: str = "/lora_storage"
-    AUDIO_DIR: str = "/audio"
-    VIDEO_RAW_DIR: str = "/video_raw"
-    VIDEO_FINAL_DIR: str = "/video_final"
+    # File Paths (RunPod için /workspace kullanılır)
+    DATASETS_DIR: str = "/workspace/datasets"
+    LORA_STORAGE_DIR: str = "/workspace/lora_storage"
+    AUDIO_DIR: str = "/workspace/audio"
+    VIDEO_RAW_DIR: str = "/workspace/video_raw"
+    VIDEO_FINAL_DIR: str = "/workspace/video_final"
     
     # LoRA Training
     SD_BASE_MODEL: str = "runwayml/stable-diffusion-v1-5"
