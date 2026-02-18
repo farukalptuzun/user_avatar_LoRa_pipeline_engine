@@ -138,10 +138,16 @@ if [ ! -f ".installed" ]; then
         echo "⚠️  Bazı paketler yüklenemedi, devam ediliyor..."
     }
     
-    # opencv-python'ı numpy ile uyumlu hale getir
-    echo "  → OpenCV yeniden yükleniyor..."
-    pip install --force-reinstall opencv-python==4.8.1.78 --quiet || {
-        echo "⚠️  OpenCV yükleme hatası, devam ediliyor..."
+    # opencv-python'ı numpy ile uyumlu hale getir (NumPy'yı koruyarak)
+    echo "  → OpenCV yeniden yükleniyor (NumPy korunuyor)..."
+    # Önce NumPy'yi sabitle
+    pip install "numpy<2.0,>=1.26.0" --force-reinstall --quiet
+    # OpenCV'yi --no-deps ile yükle (NumPy dependency'sini yok say)
+    pip install --force-reinstall --no-deps opencv-python==4.8.1.78 --quiet || {
+        echo "⚠️  OpenCV yükleme hatası, normal yükleme deneniyor..."
+        pip install --force-reinstall opencv-python==4.8.1.78 --quiet
+        # Eğer NumPy yine yükseldiyse tekrar düşür
+        pip install "numpy<2.0,>=1.26.0" --force-reinstall --quiet
     }
     
     # Test: OpenCV import edilebiliyor mu?
@@ -149,7 +155,8 @@ if [ ! -f ".installed" ]; then
     python3 -c "import cv2; import numpy; print(f'✅ OpenCV {cv2.__version__} ve NumPy {numpy.__version__} uyumlu')" 2>/dev/null || {
         echo "⚠️  OpenCV import hatası, NumPy yeniden düşürülüyor..."
         pip install "numpy<2.0,>=1.26.0" --force-reinstall --quiet
-        pip install --force-reinstall opencv-python==4.8.1.78 --quiet
+        pip install --force-reinstall --no-deps opencv-python==4.8.1.78 --quiet
+        pip install "numpy<2.0,>=1.26.0" --force-reinstall --quiet
     }
     
     set -e  # Tekrar aç
@@ -166,7 +173,8 @@ else
     if [ $CV2_STATUS -ne 0 ]; then
         echo "⚠️  OpenCV/NumPy uyumsuzluğu tespit edildi, düzeltiliyor..."
         pip install "numpy<2.0,>=1.26.0" --force-reinstall --quiet
-        pip install --force-reinstall opencv-python==4.8.1.78 --quiet
+        pip install --force-reinstall --no-deps opencv-python==4.8.1.78 --quiet
+        pip install "numpy<2.0,>=1.26.0" --force-reinstall --quiet
         echo "✅ NumPy/OpenCV düzeltildi"
     fi
 fi
@@ -195,7 +203,14 @@ mkdir -p /workspace/video_raw
 mkdir -p /workspace/video_final
 echo "✅ Klasörler hazır"
 
-# 5. Veritabanını başlat
+# 5. Python cache temizleme (Pydantic Settings güncellemeleri için)
+echo ""
+echo "🧹 Python cache temizleniyor..."
+find . -type d -name "__pycache__" -exec rm -r {} + 2>/dev/null || true
+find . -type f -name "*.pyc" -delete 2>/dev/null || true
+echo "✅ Cache temizlendi"
+
+# 6. Veritabanını başlat
 echo ""
 echo "🗄️  Veritabanı başlatılıyor..."
 set +e  # Geçici olarak hata kontrolünü kapat
@@ -207,7 +222,7 @@ if [ $DB_INIT_STATUS -ne 0 ]; then
     echo "💡 API çalışmaya devam edecek ama veritabanı işlemleri başarısız olabilir"
 fi
 
-# 6. Ngrok token kontrolü (opsiyonel - environment variable'dan)
+# 7. Ngrok token kontrolü (opsiyonel - environment variable'dan)
 if [ -z "$NGROK_AUTHTOKEN" ]; then
     echo ""
     echo "⚠️  NGROK_AUTHTOKEN environment variable bulunamadı"
@@ -217,14 +232,14 @@ else
     echo "✅ Ngrok token ayarlandı"
 fi
 
-# 7. Eski process'leri temizle
+# 8. Eski process'leri temizle
 echo ""
 echo "🧹 Eski process'ler temizleniyor..."
 pkill -f uvicorn || true
 pkill -f ngrok || true
 sleep 2
 
-# 8. API'yi başlat (arka planda)
+# 9. API'yi başlat (arka planda)
 echo ""
 echo "🌐 API başlatılıyor..."
 nohup uvicorn main:app --host 0.0.0.0 --port 8000 > /workspace/api.log 2>&1 &
@@ -240,7 +255,7 @@ else
     exit 1
 fi
 
-# 9. Ngrok'u başlat (arka planda)
+# 10. Ngrok'u başlat (arka planda)
 echo ""
 echo "🌍 Ngrok başlatılıyor..."
 nohup ngrok http 8000 --log=stdout > /workspace/ngrok.log 2>&1 &
@@ -295,7 +310,7 @@ echo "🛑 Durdurma:"
 echo "   pkill -f uvicorn && pkill -f ngrok"
 echo ""
 
-# 10. (Opsiyonel) Celery Worker başlat
+# 11. (Opsiyonel) Celery Worker başlat
 if [ "$START_CELERY_WORKER" = "true" ]; then
     echo ""
     echo "⚙️  Celery Worker başlatılıyor..."
