@@ -61,9 +61,16 @@ class Settings(BaseSettings):
     ELEVENLABS_RETRY_ATTEMPTS: int = 2
     ELEVENLABS_RETRY_DELAY: int = 1  # seconds
     
+    # Ngrok (optional)
+    NGROK_AUTHTOKEN: Optional[str] = None
+    
+    # Celery Worker (optional)
+    START_CELERY_WORKER: bool = False
+    
     class Config:
         env_file = ".env"
         case_sensitive = True
+        extra = "ignore"  # Ignore extra environment variables
 
 
 # Global settings instance

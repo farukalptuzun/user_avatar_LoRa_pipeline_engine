@@ -122,13 +122,17 @@ if [ ! -f ".installed" ]; then
     # pip'i güncelle
     pip install --upgrade pip --quiet
     
-    # NumPy uyumluluğu için önce numpy yükle
-    echo "  → NumPy yükleniyor..."
-    pip install "numpy<2.0,>=1.26.0" --quiet || {
-        echo "⚠️  NumPy yükleme hatası, devam ediliyor..."
+    # NumPy uyumluluğu için önce numpy'yi düşür (OpenCV için)
+    echo "  → NumPy düşürülüyor (OpenCV uyumluluğu için)..."
+    pip install "numpy<2.0,>=1.26.0" --force-reinstall --quiet || {
+        echo "⚠️  NumPy düşürme hatası, devam ediliyor..."
     }
     
-    # Diğer paketleri yükle (numpy hariç - zaten yüklü)
+    # NumPy versiyonunu kontrol et
+    NUMPY_VERSION=$(python3 -c "import numpy; print(numpy.__version__)" 2>/dev/null || echo "")
+    echo "  → NumPy versiyonu: $NUMPY_VERSION"
+    
+    # Diğer paketleri yükle
     echo "  → Diğer paketler yükleniyor..."
     pip install -r requirements.txt --quiet || {
         echo "⚠️  Bazı paketler yüklenemedi, devam ediliyor..."
@@ -140,12 +144,31 @@ if [ ! -f ".installed" ]; then
         echo "⚠️  OpenCV yükleme hatası, devam ediliyor..."
     }
     
+    # Test: OpenCV import edilebiliyor mu?
+    echo "  → OpenCV test ediliyor..."
+    python3 -c "import cv2; import numpy; print(f'✅ OpenCV {cv2.__version__} ve NumPy {numpy.__version__} uyumlu')" 2>/dev/null || {
+        echo "⚠️  OpenCV import hatası, NumPy yeniden düşürülüyor..."
+        pip install "numpy<2.0,>=1.26.0" --force-reinstall --quiet
+        pip install --force-reinstall opencv-python==4.8.1.78 --quiet
+    }
+    
     set -e  # Tekrar aç
     
     touch .installed
     echo "✅ Bağımlılıklar yüklendi (bazı uyarılar normal olabilir)"
 else
     echo "✅ Bağımlılıklar zaten yüklü"
+    # OpenCV/NumPy uyumluluğunu kontrol et ve düzelt
+    set +e
+    python3 -c "import cv2; import numpy" 2>/dev/null
+    CV2_STATUS=$?
+    set -e
+    if [ $CV2_STATUS -ne 0 ]; then
+        echo "⚠️  OpenCV/NumPy uyumsuzluğu tespit edildi, düzeltiliyor..."
+        pip install "numpy<2.0,>=1.26.0" --force-reinstall --quiet
+        pip install --force-reinstall opencv-python==4.8.1.78 --quiet
+        echo "✅ NumPy/OpenCV düzeltildi"
+    fi
 fi
 
 # 3. .env dosyası kontrolü
