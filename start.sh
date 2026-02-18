@@ -30,21 +30,85 @@ echo "✅ Python: $(python3 --version)"
 echo ""
 echo "📦 Ngrok kuruluyor..."
 if ! command -v ngrok &> /dev/null; then
-    curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | \
-        sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null && \
-        echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | \
-        sudo tee /etc/apt/sources.list.d/ngrok.list && \
-        sudo apt update && \
-        sudo apt install ngrok -y || {
-            echo "⚠️  Ngrok kurulumu başarısız, alternatif yöntem deneniyor..."
-            wget https://bin.equinox.io/c/bNyj1mQV2kg/ngrok-v3-stable-linux-amd64.tgz -O /tmp/ngrok.tgz
-            tar -xzf /tmp/ngrok.tgz -C /tmp
-            sudo mv /tmp/ngrok /usr/local/bin/ngrok
-            sudo chmod +x /usr/local/bin/ngrok
-        }
-    echo "✅ Ngrok kuruldu"
+    # RunPod'da sudo olmayabilir, root kullanıcı kontrolü
+    if [ "$EUID" -eq 0 ] || [ "$(id -u)" -eq 0 ]; then
+        SUDO_CMD=""
+    else
+        # sudo var mı kontrol et
+        if command -v sudo &> /dev/null; then
+            SUDO_CMD="sudo"
+        else
+            SUDO_CMD=""
+        fi
+    fi
+    
+    # Önce apt ile deneme (Debian/Ubuntu)
+    if command -v apt-get &> /dev/null; then
+        set +e
+        # Güncel repository (bookworm)
+        curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | \
+            $SUDO_CMD tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null 2>&1 && \
+            echo "deb https://ngrok-agent.s3.amazonaws.com bookworm main" | \
+            $SUDO_CMD tee /etc/apt/sources.list.d/ngrok.list >/dev/null 2>&1 && \
+            $SUDO_CMD apt update >/dev/null 2>&1 && \
+            $SUDO_CMD apt install ngrok -y >/dev/null 2>&1
+        APT_STATUS=$?
+        set -e
+        
+        if [ $APT_STATUS -eq 0 ] && command -v ngrok &> /dev/null; then
+            echo "✅ Ngrok apt ile kuruldu"
+        else
+            echo "⚠️  Apt kurulumu başarısız, binary indirme deneniyor..."
+            # Binary indirme (güncel URL - .tgz formatı)
+            wget -q "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-linux-amd64.tgz" -O /tmp/ngrok.tgz 2>/dev/null || \
+            curl -L "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-linux-amd64.tgz" -o /tmp/ngrok.tgz 2>/dev/null
+            
+            if [ -f /tmp/ngrok.tgz ]; then
+                # tar ile çıkar (.tgz formatı)
+                tar -xzf /tmp/ngrok.tgz -C /tmp 2>/dev/null
+                if [ -f /tmp/ngrok ]; then
+                    $SUDO_CMD mv /tmp/ngrok /usr/local/bin/ngrok 2>/dev/null || mv /tmp/ngrok /usr/local/bin/ngrok
+                    $SUDO_CMD chmod +x /usr/local/bin/ngrok 2>/dev/null || chmod +x /usr/local/bin/ngrok
+                    rm -f /tmp/ngrok.tgz
+                    echo "✅ Ngrok binary ile kuruldu"
+                else
+                    echo "⚠️  Ngrok binary çıkarılamadı"
+                fi
+            else
+                echo "⚠️  Ngrok indirilemedi, manuel kurulum gerekebilir"
+                echo "💡 Alternatif: https://ngrok.com/download adresinden indirin"
+            fi
+        fi
+    else
+        # Apt yoksa direkt binary indirme
+        echo "⚠️  Apt bulunamadı, binary indirme deneniyor..."
+        wget -q "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-linux-amd64.tgz" -O /tmp/ngrok.tgz 2>/dev/null || \
+        curl -L "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-linux-amd64.tgz" -o /tmp/ngrok.tgz 2>/dev/null
+        
+        if [ -f /tmp/ngrok.tgz ]; then
+            # tar ile çıkar (.tgz formatı)
+            tar -xzf /tmp/ngrok.tgz -C /tmp 2>/dev/null
+            if [ -f /tmp/ngrok ]; then
+                mv /tmp/ngrok /usr/local/bin/ngrok 2>/dev/null || cp /tmp/ngrok /usr/local/bin/ngrok
+                chmod +x /usr/local/bin/ngrok
+                rm -f /tmp/ngrok.tgz
+                echo "✅ Ngrok binary ile kuruldu"
+            else
+                echo "⚠️  Ngrok binary çıkarılamadı"
+            fi
+        else
+            echo "⚠️  Ngrok indirilemedi"
+        fi
+    fi
+    
+    # Son kontrol
+    if command -v ngrok &> /dev/null; then
+        echo "✅ Ngrok hazır: $(ngrok version 2>/dev/null || echo 'kurulu')"
+    else
+        echo "❌ Ngrok kurulamadı! API çalışacak ama public URL olmayacak"
+    fi
 else
-    echo "✅ Ngrok zaten kurulu"
+    echo "✅ Ngrok zaten kurulu: $(ngrok version 2>/dev/null || echo 'kurulu')"
 fi
 
 # 2. Python bağımlılıkları
