@@ -1,0 +1,193 @@
+"""SadTalker wrapper for talking head video generation"""
+
+import os
+import sys
+import subprocess
+from pathlib import Path
+from typing import Optional
+from app.config.settings import settings
+
+
+class SadTalkerWrapper:
+    """Wrapper for SadTalker inference"""
+    
+    def __init__(self, sadtalker_path: Optional[str] = None):
+        """
+        Initialize SadTalker wrapper
+        
+        Args:
+            sadtalker_path: Path to SadTalker repository (optional)
+        """
+        self.sadtalker_path = sadtalker_path or os.getenv("SADTALKER_PATH", "./SadTalker")
+        self.checkpoint_path = os.getenv("SADTALKER_CHECKPOINT_PATH", "./checkpoints")
+    
+    def generate_video(
+        self,
+        image_path: str,
+        audio_path: str,
+        output_path: Optional[str] = None,
+        resolution: int = 512
+    ) -> Optional[str]:
+        """
+        Generate talking head video from image and audio
+        
+        Args:
+            image_path: Path to reference face image (512x512)
+            audio_path: Path to audio WAV file
+            output_path: Output video path (optional)
+            resolution: Output resolution (default 512)
+            
+        Returns:
+            Path to generated video if successful, None otherwise
+        """
+        if output_path is None:
+            output_path = str(Path(settings.VIDEO_RAW_DIR) / f"{Path(audio_path).stem}.mp4")
+        
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        
+        # Check if SadTalker is available
+        if not self._check_sadtalker_available():
+            # Fallback: use subprocess call if SadTalker is installed separately
+            return self._generate_via_subprocess(image_path, audio_path, output_path, resolution)
+        
+        # Use Python API if available
+        return self._generate_via_api(image_path, audio_path, output_path, resolution)
+    
+    def _check_sadtalker_available(self) -> bool:
+        """Check if SadTalker is available as Python module"""
+        try:
+            # Try importing SadTalker
+            import sys
+            sys.path.insert(0, self.sadtalker_path)
+            # This would work if SadTalker is properly installed
+            return False  # For now, use subprocess approach
+        except ImportError:
+            return False
+    
+    def _generate_via_subprocess(
+        self,
+        image_path: str,
+        audio_path: str,
+        output_path: str,
+        resolution: int
+    ) -> Optional[str]:
+        """
+        Generate video via SadTalker subprocess call
+        
+        Args:
+            image_path: Path to reference image
+            audio_path: Path to audio file
+            output_path: Output video path
+            resolution: Output resolution
+            
+        Returns:
+            Output path if successful, None otherwise
+        """
+        # SadTalker inference script path
+        inference_script = os.path.join(self.sadtalker_path, "inference.py")
+        
+        if not os.path.exists(inference_script):
+            # Try alternative paths
+            inference_script = os.path.join(self.sadtalker_path, "inference", "inference.py")
+        
+        if not os.path.exists(inference_script):
+            print(f"SadTalker inference script not found at {inference_script}", file=sys.stderr)
+            print("Please ensure SadTalker is installed and SADTALKER_PATH is set correctly")
+            return None
+        
+        cmd = [
+            sys.executable,
+            inference_script,
+            "--driven_audio", audio_path,
+            "--source_image", image_path,
+            "--result_dir", os.path.dirname(output_path),
+            "--preprocess", "full",  # Full preprocessing
+            "--enhancer", "gfpgan",  # Use GFPGAN for enhancement
+            "--background_enhancer", "realesrgan",  # Background enhancement
+        ]
+        
+        try:
+            result = subprocess.run(
+                cmd,
+                cwd=self.sadtalker_path,
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            
+            # SadTalker typically outputs to a timestamped directory
+            # Find the generated video file
+            output_dir = Path(os.path.dirname(output_path))
+            video_files = list(output_dir.glob("*.mp4"))
+            
+            if video_files:
+                # Copy/rename to desired output path
+                generated_video = video_files[0]
+                if str(generated_video) != output_path:
+                    import shutil
+                    shutil.copy2(generated_video, output_path)
+                
+                return output_path
+            
+            return None
+        except subprocess.CalledProcessError as e:
+            print(f"SadTalker inference failed: {e.stderr}", file=sys.stderr)
+            return None
+    
+    def _generate_via_api(
+        self,
+        image_path: str,
+        audio_path: str,
+        output_path: str,
+        resolution: int
+    ) -> Optional[str]:
+        """
+        Generate video via SadTalker Python API
+        
+        Args:
+            image_path: Path to reference image
+            audio_path: Path to audio file
+            output_path: Output video path
+            resolution: Output resolution
+            
+        Returns:
+            Output path if successful, None otherwise
+        """
+        # Placeholder for direct Python API integration
+        # In production, integrate with SadTalker's Python API directly
+        # This would involve:
+        # 1. Loading the model
+        # 2. Processing the image and audio
+        # 3. Generating frames
+        # 4. Combining into video
+        
+        print("Direct Python API integration not yet implemented")
+        return None
+    
+    def validate_inputs(self, image_path: str, audio_path: str) -> tuple[bool, Optional[str]]:
+        """
+        Validate input files
+        
+        Args:
+            image_path: Path to image file
+            audio_path: Path to audio file
+            
+        Returns:
+            Tuple of (is_valid, error_message)
+        """
+        if not os.path.exists(image_path):
+            return False, f"Image file not found: {image_path}"
+        
+        if not os.path.exists(audio_path):
+            return False, f"Audio file not found: {audio_path}"
+        
+        # Check image format
+        valid_image_extensions = ['.jpg', '.jpeg', '.png']
+        if not any(image_path.lower().endswith(ext) for ext in valid_image_extensions):
+            return False, f"Invalid image format. Supported: {valid_image_extensions}"
+        
+        # Check audio format
+        if not audio_path.lower().endswith('.wav'):
+            return False, "Audio file must be in WAV format"
+        
+        return True, None

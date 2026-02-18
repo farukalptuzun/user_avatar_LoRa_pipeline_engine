@@ -1,0 +1,1 @@
+"""Product Compositor Module"""
