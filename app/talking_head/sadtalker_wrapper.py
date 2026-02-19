@@ -77,6 +77,38 @@ class SadTalkerWrapper:
         except ImportError:
             return False
     
+    def _patch_sadtalker_numpy_compatibility(self):
+        """
+        Patches the SadTalker my_awing_arch.py file to replace deprecated np.float with np.float64.
+        This is necessary due to NumPy 1.20+ deprecating np.float.
+        """
+        target_file = os.path.join(self.sadtalker_path, "src", "face3d", "util", "my_awing_arch.py")
+        
+        if not os.path.exists(target_file):
+            print(f"Warning: SadTalker patch target file not found: {target_file}", file=sys.stderr)
+            return
+        
+        try:
+            # Read the file
+            with open(target_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            # Check if already patched
+            if 'np.float64' in content and 'np.float' not in content:
+                return  # Already patched
+            
+            # Replace np.float with np.float64
+            original_content = content
+            content = content.replace('np.float', 'np.float64')
+            
+            # Only write if there was a change
+            if content != original_content:
+                with open(target_file, 'w', encoding='utf-8') as f:
+                    f.write(content)
+                print(f"Patched: {target_file} - replaced np.float with np.float64", file=sys.stderr)
+        except Exception as e:
+            print(f"Warning: Failed to patch SadTalker NumPy compatibility: {e}", file=sys.stderr)
+    
     def _generate_via_subprocess(
         self,
         image_path: str,
@@ -96,6 +128,9 @@ class SadTalkerWrapper:
         Returns:
             Output path if successful, None otherwise
         """
+        # Apply NumPy compatibility patch for SadTalker before running the subprocess
+        self._patch_sadtalker_numpy_compatibility()
+        
         # SadTalker inference script path
         inference_script = os.path.join(self.sadtalker_path, "inference.py")
         
