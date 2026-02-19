@@ -67,6 +67,10 @@ class Settings(BaseSettings):
     # Celery Worker (optional)
     START_CELERY_WORKER: bool = False
     
+    # SadTalker Configuration
+    SADTALKER_PATH: str = "/workspace/SadTalker"
+    SADTALKER_CHECKPOINT_PATH: str = "/workspace/SadTalker/checkpoints"
+    
     class Config:
         env_file = ".env"
         case_sensitive = True

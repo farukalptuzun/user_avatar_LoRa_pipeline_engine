@@ -18,8 +18,21 @@ class SadTalkerWrapper:
         Args:
             sadtalker_path: Path to SadTalker repository (optional)
         """
-        self.sadtalker_path = sadtalker_path or os.getenv("SADTALKER_PATH", "./SadTalker")
-        self.checkpoint_path = os.getenv("SADTALKER_CHECKPOINT_PATH", "./checkpoints")
+        # Use settings if available, otherwise fallback to environment variable or default
+        if sadtalker_path:
+            self.sadtalker_path = sadtalker_path
+        else:
+            # Try settings first, then environment variable, then default
+            self.sadtalker_path = getattr(settings, 'SADTALKER_PATH', None) or \
+                                 os.getenv("SADTALKER_PATH", "/workspace/SadTalker")
+        
+        # Resolve to absolute path
+        self.sadtalker_path = os.path.abspath(os.path.expanduser(self.sadtalker_path))
+        
+        # Same for checkpoint path
+        self.checkpoint_path = getattr(settings, 'SADTALKER_CHECKPOINT_PATH', None) or \
+                             os.getenv("SADTALKER_CHECKPOINT_PATH", "/workspace/SadTalker/checkpoints")
+        self.checkpoint_path = os.path.abspath(os.path.expanduser(self.checkpoint_path))
     
     def generate_video(
         self,
