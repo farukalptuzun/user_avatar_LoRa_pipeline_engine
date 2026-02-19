@@ -194,11 +194,11 @@ class LoRATrainer:
             text_encoder.requires_grad_(False)
             text_encoder.eval()
             
-            # Load UNet
+            # Load UNet (float32 for training to avoid loss NaN with float16)
             unet = UNet2DConditionModel.from_pretrained(
                 model_id,
                 subfolder="unet",
-                torch_dtype=torch.float16 if self.device.type == "cuda" else torch.float32
+                torch_dtype=torch.float32
             ).to(self.device)
             
             # Configure LoRA
@@ -218,10 +218,13 @@ class LoRATrainer:
             # Load noise scheduler
             noise_scheduler = DDPMScheduler.from_pretrained(model_id, subfolder="scheduler")
             
-            # Setup optimizer
+            # Lower LR to reduce NaN risk; keep at most 5e-5 if config is higher
+            lr = min(float(self.learning_rate), 5e-5)
+            if lr != self.learning_rate:
+                print(f"[LoRA Trainer] Learning rate capped to {lr} (was {self.learning_rate})")
             optimizer = torch.optim.AdamW(
                 unet.parameters(),
-                lr=self.learning_rate,
+                lr=lr,
                 betas=(0.9, 0.999),
                 weight_decay=0.01,
                 eps=1e-8
@@ -237,7 +240,8 @@ class LoRATrainer:
                 epoch_loss = 0.0
                 
                 for batch_idx, batch in enumerate(dataloader):
-                    pixel_values = batch["pixel_values"].to(self.device, dtype=torch.float16 if self.device.type == "cuda" else torch.float32)
+                    # Use float32 for training to avoid loss NaN
+                    pixel_values = batch["pixel_values"].to(self.device, dtype=torch.float32)
                     captions = batch["caption"]
                     
                     # Encode text
@@ -250,15 +254,18 @@ class LoRATrainer:
                             return_tensors="pt",
                         )
                         text_input_ids = text_inputs.input_ids.to(self.device)
-                        encoder_hidden_states = text_encoder(text_input_ids)[0]
+                        encoder_hidden_states = text_encoder(text_input_ids)[0].to(torch.float32)
                     
-                    # Encode images to latents
+                    # Encode images to latents (float32)
                     with torch.no_grad():
-                        latents = vae.encode(pixel_values).latent_dist.sample()
+                        latents = vae.encode(pixel_values).latent_dist.sample().to(torch.float32)
                         latents = latents * vae.config.scaling_factor
+                        if not torch.isfinite(latents).all():
+                            print(f"[LoRA Trainer] Skipping batch: non-finite latents")
+                            continue
                     
-                    # Sample noise
-                    noise = torch.randn_like(latents)
+                    # Sample noise (float32)
+                    noise = torch.randn_like(latents, dtype=torch.float32, device=self.device)
                     timesteps = torch.randint(
                         0,
                         noise_scheduler.config.num_train_timesteps,
@@ -270,15 +277,18 @@ class LoRATrainer:
                     # Add noise to latents
                     noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
                     
-                    # Predict noise
+                    # Predict noise (unet in float32)
                     model_pred = unet(
                         noisy_latents,
                         timesteps,
                         encoder_hidden_states=encoder_hidden_states,
                     ).sample
                     
-                    # Calculate loss
-                    loss = torch.nn.functional.mse_loss(model_pred.float(), noise.float(), reduction="mean")
+                    # Loss in float32
+                    loss = torch.nn.functional.mse_loss(model_pred, noise, reduction="mean")
+                    if not torch.isfinite(loss).item():
+                        print(f"[LoRA Trainer] Skipping step: non-finite loss")
+                        continue
                     
                     # Backward pass
                     optimizer.zero_grad()
@@ -299,18 +309,22 @@ class LoRATrainer:
             print(f"[LoRA Trainer] Saving LoRA weights to {output_path}...")
             Path(output_path).parent.mkdir(parents=True, exist_ok=True)
             
-            # Get LoRA state dict
-            lora_state_dict = unet.get_peft_state_dict()
-            
-            # Save as safetensors
-            safetensors.torch.save_file(lora_state_dict, output_path)
-            print(f"[LoRA Trainer] LoRA weights saved successfully!")
-            
-            # Also save in diffusers format (optional, for compatibility)
-            output_dir = Path(output_path).parent / f"{user_id}_lora"
-            output_dir.mkdir(parents=True, exist_ok=True)
-            unet.save_pretrained(str(output_dir))
-            print(f"[LoRA Trainer] LoRA adapter also saved to {output_dir}")
+            # Get LoRA state dict (PEFT API: filter state_dict for lora keys; get_peft_state_dict not on all versions)
+            full_state = unet.state_dict()
+            lora_state_dict = {k: v for k, v in full_state.items() if "lora" in k.lower()}
+            if not lora_state_dict:
+                # Fallback: save full adapter via PEFT save_pretrained, then copy adapter file if needed
+                output_dir = Path(output_path).parent / f"{user_id}_lora"
+                output_dir.mkdir(parents=True, exist_ok=True)
+                unet.save_pretrained(str(output_dir))
+                print(f"[LoRA Trainer] LoRA adapter saved to {output_dir} (no lora keys in state_dict)")
+            else:
+                safetensors.torch.save_file(lora_state_dict, output_path)
+                print(f"[LoRA Trainer] LoRA weights saved successfully!")
+                output_dir = Path(output_path).parent / f"{user_id}_lora"
+                output_dir.mkdir(parents=True, exist_ok=True)
+                unet.save_pretrained(str(output_dir))
+                print(f"[LoRA Trainer] LoRA adapter also saved to {output_dir}")
             
             print(f"[LoRA Trainer] Training completed successfully!")
             return True

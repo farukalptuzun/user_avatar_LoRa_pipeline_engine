@@ -63,13 +63,15 @@ class FacePreprocessor:
         left_eye = landmarks[38]
         right_eye = landmarks[88]
         
-        # Calculate angle
-        dy = right_eye[1] - left_eye[1]
-        dx = right_eye[0] - left_eye[0]
-        angle = np.degrees(np.arctan2(dy, dx))
+        # Calculate angle (Python float for OpenCV compatibility)
+        dy = float(right_eye[1] - left_eye[1])
+        dx = float(right_eye[0] - left_eye[0])
+        angle = float(np.degrees(np.arctan2(dy, dx)))
         
-        # Get center point (use float division for OpenCV compatibility)
-        center = (float(left_eye[0] + right_eye[0]) / 2.0, float(left_eye[1] + right_eye[1]) / 2.0)
+        # Get center point (Python floats for OpenCV getRotationMatrix2D)
+        cx = (float(left_eye[0]) + float(right_eye[0])) / 2.0
+        cy = (float(left_eye[1]) + float(right_eye[1])) / 2.0
+        center = (cx, cy)
         
         # Rotate image
         rotation_matrix = cv2.getRotationMatrix2D(center, angle, 1.0)
