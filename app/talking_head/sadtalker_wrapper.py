@@ -114,6 +114,7 @@ class SadTalkerWrapper:
             "--driven_audio", audio_path,
             "--source_image", image_path,
             "--result_dir", os.path.dirname(output_path),
+            "--checkpoint_dir", self.checkpoint_path,
             "--preprocess", "full",  # Full preprocessing
             "--enhancer", "gfpgan",  # Use GFPGAN for enhancement
             "--background_enhancer", "realesrgan",  # Background enhancement
