@@ -33,6 +33,7 @@ torch==2.1.1
 torchvision==0.16.1
 safetensors==0.4.1
 peft==0.7.1
+huggingface_hub<0.20.0
 
 # TTS (ElevenLabs)
 requests==2.31.0

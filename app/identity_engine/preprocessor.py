@@ -68,8 +68,8 @@ class FacePreprocessor:
         dx = right_eye[0] - left_eye[0]
         angle = np.degrees(np.arctan2(dy, dx))
         
-        # Get center point
-        center = ((left_eye[0] + right_eye[0]) // 2, (left_eye[1] + right_eye[1]) // 2)
+        # Get center point (use float division for OpenCV compatibility)
+        center = (float(left_eye[0] + right_eye[0]) / 2.0, float(left_eye[1] + right_eye[1]) / 2.0)
         
         # Rotate image
         rotation_matrix = cv2.getRotationMatrix2D(center, angle, 1.0)

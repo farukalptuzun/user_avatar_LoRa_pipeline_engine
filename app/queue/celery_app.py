@@ -25,9 +25,12 @@ celery_app.conf.update(
     worker_max_tasks_per_child=1,  # Restart worker after each task to free GPU memory
 )
 
-# Task routes
+# Task routes (use task name as registered with name=...)
+# Both short name and full module path are included for compatibility
 celery_app.conf.task_routes = {
+    "train_identity_task": {"queue": "gpu"},
     "app.queue.tasks.train_identity_task": {"queue": "gpu"},
+    "generate_video_task": {"queue": "gpu"},
     "app.queue.tasks.generate_video_task": {"queue": "gpu"},
     "app.queue.tasks.*": {"queue": "default"},
 }
