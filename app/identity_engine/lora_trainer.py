@@ -256,10 +256,13 @@ class LoRATrainer:
                         text_input_ids = text_inputs.input_ids.to(self.device)
                         encoder_hidden_states = text_encoder(text_input_ids)[0].to(torch.float32)
                     
-                    # Encode images to latents (float32)
+                    # Encode images to latents (VAE float16 bekliyor, sonra float32'ye çevir)
                     with torch.no_grad():
-                        latents = vae.encode(pixel_values).latent_dist.sample().to(torch.float32)
-                        latents = latents * vae.config.scaling_factor
+                        # VAE float16 yüklü, bu yüzden pixel_values'ı float16'ya çevir
+                        pixel_values_fp16 = pixel_values.to(torch.float16)
+                        latents = vae.encode(pixel_values_fp16).latent_dist.sample()
+                        # Sonra float32'ye çevir (loss hesaplaması için)
+                        latents = latents.to(torch.float32) * vae.config.scaling_factor
                         if not torch.isfinite(latents).all():
                             print(f"[LoRA Trainer] Skipping batch: non-finite latents")
                             continue
