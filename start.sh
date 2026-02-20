@@ -211,7 +211,7 @@ fi
 if [ -f "$SADTALKER_DIR/requirements.txt" ]; then
     echo "  → SadTalker bağımlılıkları yükleniyor..."
     set +e
-    pip install -q face_alignment imageio-ffmpeg basicsr facexlib gfpgan av safetensors 2>/dev/null || true
+    pip install -q face_alignment imageio-ffmpeg basicsr facexlib gfpgan av safetensors kornia yacs librosa 2>/dev/null || true
     set -e
 fi
 
@@ -261,6 +261,35 @@ echo "🧹 Python cache temizleniyor..."
 find . -type d -name "__pycache__" -exec rm -r {} + 2>/dev/null || true
 find . -type f -name "*.pyc" -delete 2>/dev/null || true
 echo "✅ Cache temizlendi"
+
+# 5b. Redis kurulumu ve başlatma (Celery için zorunlu)
+echo ""
+echo "🔴 Redis kontrol ediliyor..."
+if ! command -v redis-server &> /dev/null; then
+    echo "  → Redis kuruluyor..."
+    if command -v apt-get &> /dev/null; then
+        apt-get update -qq && apt-get install -y redis-server
+        echo "✅ Redis kuruldu"
+    else
+        echo "❌ Redis kurulamadı (apt-get yok). Celery çalışmayacak!"
+        echo "💡 Alternatif: .env'de REDIS_URL ile Upstash kullanın"
+    fi
+else
+    echo "✅ Redis zaten kurulu"
+fi
+if command -v redis-server &> /dev/null; then
+    # Redis çalışıyorsa yeniden başlatma
+    if ! redis-cli ping &>/dev/null; then
+        redis-server --daemonize yes
+        sleep 1
+    fi
+    if redis-cli ping &>/dev/null; then
+        echo "✅ Redis çalışıyor"
+    else
+        echo "⚠️  Redis başlatılamadı. Celery hata verebilir."
+        echo "💡 Manuel: redis-server --daemonize yes"
+    fi
+fi
 
 # 6. Veritabanını başlat
 echo ""

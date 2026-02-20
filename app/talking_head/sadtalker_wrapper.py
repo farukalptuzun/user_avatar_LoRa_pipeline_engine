@@ -1,6 +1,7 @@
 """SadTalker wrapper for talking head video generation"""
 
 import os
+import re
 import sys
 import subprocess
 from pathlib import Path
@@ -93,13 +94,13 @@ class SadTalkerWrapper:
             with open(target_file, 'r', encoding='utf-8') as f:
                 content = f.read()
             
-            # Check if already patched
-            if 'np.float64' in content and 'np.float' not in content:
-                return  # Already patched
+            # Fix any corrupted np.float6464... from previous over-patching
+            content = re.sub(r'np\.float64(64)+', 'np.float64', content)
             
-            # Replace np.float with np.float64
+            # Replace only deprecated np.float (not np.float32, np.float64)
+            # Use negative lookahead to avoid matching np.float64, np.float32
             original_content = content
-            content = content.replace('np.float', 'np.float64')
+            content = re.sub(r'np\.float(?!\d)', 'np.float64', content)
             
             # Only write if there was a change
             if content != original_content:
