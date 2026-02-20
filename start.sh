@@ -240,6 +240,19 @@ else
     echo "✅ SadTalker checkpoint'leri zaten mevcut"
 fi
 
+# GFPGAN ve RealESRGAN ağırlıkları (her zaman kontrol et)
+cd "$SADTALKER_DIR"
+mkdir -p ./checkpoints ./gfpgan/weights
+if [ ! -f "./gfpgan/weights/GFPGANv1.4.pth" ]; then
+    echo "  → GFPGANv1.4.pth indiriliyor..."
+    wget -q -nc https://github.com/TencentARC/GFPGAN/releases/download/v1.3.0/GFPGANv1.4.pth -O ./gfpgan/weights/GFPGANv1.4.pth
+fi
+if [ ! -f "./checkpoints/RealESRGAN_x4plus.pth" ]; then
+    echo "  → RealESRGAN_x4plus.pth indiriliyor..."
+    wget -q -nc https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth -O ./checkpoints/RealESRGAN_x4plus.pth
+fi
+cd "$PROJECT_DIR" || exit 1
+
 export SADTALKER_PATH="$SADTALKER_DIR"
 export SADTALKER_CHECKPOINT_PATH="$SADTALKER_CHECKPOINTS"
 echo "  → SADTALKER_PATH=$SADTALKER_PATH"

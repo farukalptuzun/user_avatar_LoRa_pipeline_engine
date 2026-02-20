@@ -27,9 +27,10 @@ class FaceRestorer:
         try:
             from gfpgan import GFPGANer
             
-            # Initialize GFPGAN
+            # Initialize GFPGAN (use settings path: /workspace/SadTalker/gfpgan/weights/GFPGANv1.4.pth)
+            model_path = self.model_path or settings.GFPGAN_MODEL_PATH
             self.model = GFPGANer(
-                model_path=self.model_path or 'gfpgan/weights/GFPGANv1.4.pth',
+                model_path=model_path,
                 upscale=1,
                 arch='clean',
                 channel_multiplier=2,

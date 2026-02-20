@@ -70,6 +70,11 @@ class Settings(BaseSettings):
     # SadTalker Configuration
     SADTALKER_PATH: str = "/workspace/SadTalker"
     SADTALKER_CHECKPOINT_PATH: str = "/workspace/SadTalker/checkpoints"
+    SADTALKER_RESOLUTION: int = 512
+
+    # Enhancement (GFPGAN, RealESRGAN)
+    GFPGAN_MODEL_PATH: str = "/workspace/SadTalker/gfpgan/weights/GFPGANv1.4.pth"
+    REALESRGAN_MODEL_PATH: str = "/workspace/SadTalker/checkpoints/RealESRGAN_x4plus.pth"
     
     class Config:
         env_file = ".env"

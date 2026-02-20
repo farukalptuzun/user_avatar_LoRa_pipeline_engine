@@ -23,28 +23,25 @@ class VideoUpscaler:
         self._load_model()
     
     def _load_model(self):
-        """Load RealESRGAN model"""
+        """Load RealESRGAN model (RealESRGAN_x4plus uses RRDBNet, not SRVGGNetCompact)"""
         try:
             from realesrgan import RealESRGANer
-            from realesrgan.archs.srvgg_arch import SRVGGNetCompact
-            
-            # Initialize RealESRGAN
+            from basicsr.archs.rrdbnet_arch import RRDBNet
+
             if self.model_name == "RealESRGAN_x4plus":
-                model_path = 'https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth'
-                self.model = RealESRGANer(
-                    scale=4,
-                    model_path=model_path,
-                    model=SRVGGNetCompact,
-                    tile=0,
-                    tile_pad=10,
-                    pre_pad=0,
-                    half=False
-                )
+                # Local path from settings (start.sh downloads to this location)
+                model_path = settings.REALESRGAN_MODEL_PATH
+                if not os.path.exists(model_path):
+                    model_path = 'https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth'
+
+                # RRDBNet for RealESRGAN_x4plus (SRVGGNetCompact is for anime model)
+                model = RRDBNet(num_in_ch=3, num_out_ch=3, num_feat=64, num_block=23, num_grow_ch=32, scale=4)
+                self.model = RealESRGANer(scale=4, model_path=model_path, model=model, tile=0, tile_pad=10, pre_pad=0, half=False)
             else:
                 print(f"Model {self.model_name} not yet implemented")
                 self.model = None
-        except ImportError:
-            print("RealESRGAN not available. Install with: pip install realesrgan")
+        except ImportError as e:
+            print(f"RealESRGAN not available: {e}")
             self.model = None
         except Exception as e:
             print(f"Failed to load RealESRGAN model: {e}")

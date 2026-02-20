@@ -153,7 +153,8 @@ def generate_talking_head_task(self, job_id: str, user_id: str, audio_path: str)
         video_path = sadtalker.generate_video(
             image_path=face_image_path,
             audio_path=audio_path,
-            output_path=str(Path(settings.VIDEO_RAW_DIR) / f"{job_id}.mp4")
+            output_path=str(Path(settings.VIDEO_RAW_DIR) / f"{job_id}.mp4"),
+            resolution=getattr(settings, 'SADTALKER_RESOLUTION', 512)
         )
         
         if not video_path:
