@@ -193,7 +193,59 @@ if [ ! -f ".env" ]; then
     fi
 fi
 
-# 4. Gerekli klasörleri oluştur
+# 4. SadTalker kurulumu (/workspace içinde)
+echo ""
+echo "🎬 SadTalker kuruluyor..."
+SADTALKER_DIR="/workspace/SadTalker"
+if [ ! -d "$SADTALKER_DIR" ]; then
+    echo "  → SadTalker klonlanıyor..."
+    cd /workspace
+    git clone https://github.com/OpenTalker/SadTalker.git
+    cd "$PROJECT_DIR" || exit 1
+    echo "✅ SadTalker klonlandı: $SADTALKER_DIR"
+else
+    echo "✅ SadTalker zaten mevcut: $SADTALKER_DIR"
+fi
+
+# SadTalker Python bağımlılıkları (ana projeyle çakışmayanlar)
+if [ -f "$SADTALKER_DIR/requirements.txt" ]; then
+    echo "  → SadTalker bağımlılıkları yükleniyor..."
+    set +e
+    pip install -q face_alignment imageio-ffmpeg basicsr facexlib gfpgan av safetensors 2>/dev/null || true
+    set -e
+fi
+
+# SadTalker checkpoint'leri
+SADTALKER_CHECKPOINTS="$SADTALKER_DIR/checkpoints"
+if [ ! -f "$SADTALKER_CHECKPOINTS/SadTalker_V0.0.2_256.safetensors" ] && [ ! -f "$SADTALKER_CHECKPOINTS/epoch_20.pth" ]; then
+    echo "  → SadTalker checkpoint'leri indiriliyor..."
+    cd "$SADTALKER_DIR"
+    mkdir -p ./checkpoints
+    set +e
+    # OpenTalker v0.0.2-rc checkpoint'leri
+    wget -q -nc https://github.com/OpenTalker/SadTalker/releases/download/v0.0.2-rc/mapping_00109-model.pth.tar -O ./checkpoints/mapping_00109-model.pth.tar
+    wget -q -nc https://github.com/OpenTalker/SadTalker/releases/download/v0.0.2-rc/mapping_00229-model.pth.tar -O ./checkpoints/mapping_00229-model.pth.tar
+    wget -q -nc https://github.com/OpenTalker/SadTalker/releases/download/v0.0.2-rc/SadTalker_V0.0.2_256.safetensors -O ./checkpoints/SadTalker_V0.0.2_256.safetensors
+    wget -q -nc https://github.com/OpenTalker/SadTalker/releases/download/v0.0.2-rc/SadTalker_V0.0.2_512.safetensors -O ./checkpoints/SadTalker_V0.0.2_512.safetensors
+    # GFPGAN enhancer ağırlıkları
+    mkdir -p ./gfpgan/weights
+    wget -q -nc https://github.com/xinntao/facexlib/releases/download/v0.1.0/alignment_WFLW_4HG.pth -O ./gfpgan/weights/alignment_WFLW_4HG.pth
+    wget -q -nc https://github.com/xinntao/facexlib/releases/download/v0.1.0/detection_Resnet50_Final.pth -O ./gfpgan/weights/detection_Resnet50_Final.pth
+    wget -q -nc https://github.com/TencentARC/GFPGAN/releases/download/v1.3.0/GFPGANv1.4.pth -O ./gfpgan/weights/GFPGANv1.4.pth
+    wget -q -nc https://github.com/xinntao/facexlib/releases/download/v0.2.2/parsing_parsenet.pth -O ./gfpgan/weights/parsing_parsenet.pth
+    set -e
+    cd "$PROJECT_DIR" || exit 1
+    echo "✅ SadTalker checkpoint'leri indirildi"
+else
+    echo "✅ SadTalker checkpoint'leri zaten mevcut"
+fi
+
+export SADTALKER_PATH="$SADTALKER_DIR"
+export SADTALKER_CHECKPOINT_PATH="$SADTALKER_CHECKPOINTS"
+echo "  → SADTALKER_PATH=$SADTALKER_PATH"
+echo "  → SADTALKER_CHECKPOINT_PATH=$SADTALKER_CHECKPOINT_PATH"
+
+# 5. Gerekli klasörleri oluştur
 echo ""
 echo "📁 Klasörler oluşturuluyor..."
 mkdir -p /workspace/datasets
@@ -203,7 +255,7 @@ mkdir -p /workspace/video_raw
 mkdir -p /workspace/video_final
 echo "✅ Klasörler hazır"
 
-# 5. Python cache temizleme (Pydantic Settings güncellemeleri için)
+# 5a. Python cache temizleme (Pydantic Settings güncellemeleri için)
 echo ""
 echo "🧹 Python cache temizleniyor..."
 find . -type d -name "__pycache__" -exec rm -r {} + 2>/dev/null || true
@@ -310,19 +362,16 @@ echo "🛑 Durdurma:"
 echo "   pkill -f uvicorn && pkill -f ngrok"
 echo ""
 
-# 11. (Opsiyonel) Celery Worker başlat
+# 11. (Opsiyonel) Celery Worker başlat — ön planda, loglar terminalde görünür
 if [ "$START_CELERY_WORKER" = "true" ]; then
     echo ""
-    echo "⚙️  Celery Worker başlatılıyor..."
-    nohup celery -A app.queue.celery_app worker --loglevel=info --queues=gpu,default > /workspace/celery.log 2>&1 &
-    echo "✅ Celery Worker başlatıldı"
-fi
-
-echo ""
-echo "✅ Startup script tamamlandı!"
-echo ""
-
-# Logları göster (opsiyonel)
-if [ "$SHOW_LOGS" = "true" ]; then
-    tail -f /workspace/api.log
+    echo "⚙️  Celery Worker başlatılıyor (loglar burada görünecek)..."
+    echo "   API arka planda: tail -f /workspace/api.log"
+    echo "   Ngrok arka planda: tail -f /workspace/ngrok.log"
+    echo ""
+    celery -A app.queue.celery_app worker --loglevel=info --queues=gpu,default
+else
+    echo ""
+    echo "✅ Startup script tamamlandı!"
+    echo "   Celery Worker başlatmak için: START_CELERY_WORKER=true ./start.sh"
 fi

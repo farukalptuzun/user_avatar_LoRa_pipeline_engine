@@ -109,6 +109,36 @@ class SadTalkerWrapper:
         except Exception as e:
             print(f"Warning: Failed to patch SadTalker NumPy compatibility: {e}", file=sys.stderr)
     
+    def _patch_sadtalker_preprocess(self):
+        """
+        Patches the SadTalker preprocess.py to fix inhomogeneous array error.
+        NumPy 2.x is stricter about np.array with mixed scalar/array elements.
+        """
+        target_file = os.path.join(self.sadtalker_path, "src", "face3d", "util", "preprocess.py")
+        
+        if not os.path.exists(target_file):
+            print(f"Warning: SadTalker preprocess patch target not found: {target_file}", file=sys.stderr)
+            return
+        
+        try:
+            with open(target_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            # Check if already patched
+            if '_to_scalar' in content or 'np.asarray(t[0]).flat[0]' in content:
+                return  # Already patched
+            
+            old_line = "trans_params = np.array([w0, h0, s, t[0], t[1]])"
+            new_line = "trans_params = np.array([float(w0), float(h0), float(s), float(np.asarray(t[0]).flat[0]), float(np.asarray(t[1]).flat[0])], dtype=np.float64)"
+            
+            if old_line in content:
+                content = content.replace(old_line, new_line)
+                with open(target_file, 'w', encoding='utf-8') as f:
+                    f.write(content)
+                print(f"Patched: {target_file} - fixed trans_params inhomogeneous array", file=sys.stderr)
+        except Exception as e:
+            print(f"Warning: Failed to patch SadTalker preprocess: {e}", file=sys.stderr)
+    
     def _generate_via_subprocess(
         self,
         image_path: str,
@@ -128,8 +158,9 @@ class SadTalkerWrapper:
         Returns:
             Output path if successful, None otherwise
         """
-        # Apply NumPy compatibility patch for SadTalker before running the subprocess
+        # Apply SadTalker compatibility patches before running the subprocess
         self._patch_sadtalker_numpy_compatibility()
+        self._patch_sadtalker_preprocess()
         
         # SadTalker inference script path
         inference_script = os.path.join(self.sadtalker_path, "inference.py")
