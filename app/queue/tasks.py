@@ -252,32 +252,36 @@ def enhance_video_task(self, video_path: str, job_id: str):
 @celery_app.task(name="upload_to_s3_task", bind=True, max_retries=3)
 def upload_to_s3_task(self, video_path: str, job_id: str):
     """
-    Upload video to S3
+    Upload video to S3 (optional - returns None if S3 not configured)
     
     Args:
         video_path: Path to video file
         job_id: Job ID
         
     Returns:
-        S3 URL
+        S3 URL if successful, None if S3 not configured or upload failed
     """
     try:
         s3_client = S3Client()
         s3_url = s3_client.upload_video(video_path, f"{job_id}.mp4")
+        
+        # S3 yapılandırılmamışsa veya upload başarısızsa None döner
+        if s3_url is None:
+            return None
         
         db = get_database()
         db[JOBS_COLLECTION].update_one(
             {"job_id": job_id},
             {"$set": {
                 "s3_url": s3_url,
-                "status": JobStatus.COMPLETED.value,
-                "completed_at": datetime.utcnow()
             }}
         )
         
         return s3_url
     except Exception as e:
-        raise self.retry(exc=e, countdown=30)
+        # S3 hatası kritik değil, None döndür
+        print(f"S3 upload task failed: {e}")
+        return None
 
 
 @celery_app.task(name="generate_video_task", bind=True, max_retries=1)
@@ -326,7 +330,17 @@ def generate_video_task(self, job_id: str):
             video_path = compose_product_task(video_path, job["product_image_path"])
         
         final_video_path = enhance_video_task(video_path, job_id)
-        s3_url = upload_to_s3_task(final_video_path, job_id)
+        
+        # S3 upload (opsiyonel - yapılandırılmamışsa atla)
+        s3_url = None
+        if settings.AWS_ACCESS_KEY_ID and settings.AWS_SECRET_ACCESS_KEY and settings.S3_BUCKET_NAME:
+            try:
+                s3_url = upload_to_s3_task(final_video_path, job_id)
+            except Exception as e:
+                print(f"S3 upload failed (non-critical): {e}")
+                # S3 hatası kritik değil, devam et
+        else:
+            print("S3 not configured, skipping upload. Video saved locally.")
         
         jobs.update_one(
             {"job_id": job_id},
@@ -338,7 +352,7 @@ def generate_video_task(self, job_id: str):
             }}
         )
         
-        return {"status": "completed", "s3_url": s3_url}
+        return {"status": "completed", "video_path": final_video_path, "s3_url": s3_url}
     
     except Exception as e:
         jobs.update_one(

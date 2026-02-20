@@ -93,16 +93,16 @@ class SadTalkerWrapper:
             # Read the file
             with open(target_file, 'r', encoding='utf-8') as f:
                 content = f.read()
+            original_content = content
             
             # Fix any corrupted np.float6464... from previous over-patching
             content = re.sub(r'np\.float64(64)+', 'np.float64', content)
             
             # Replace only deprecated np.float (not np.float32, np.float64)
             # Use negative lookahead to avoid matching np.float64, np.float32
-            original_content = content
             content = re.sub(r'np\.float(?!\d)', 'np.float64', content)
             
-            # Only write if there was a change
+            # Write if repair or replace made any change
             if content != original_content:
                 with open(target_file, 'w', encoding='utf-8') as f:
                     f.write(content)

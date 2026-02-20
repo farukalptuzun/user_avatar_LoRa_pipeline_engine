@@ -245,6 +245,18 @@ export SADTALKER_CHECKPOINT_PATH="$SADTALKER_CHECKPOINTS"
 echo "  → SADTALKER_PATH=$SADTALKER_PATH"
 echo "  → SADTALKER_CHECKPOINT_PATH=$SADTALKER_CHECKPOINT_PATH"
 
+# SadTalker np.float patch (bozuk np.float6464... dosyasını düzeltir)
+AWING_ARCH="$SADTALKER_DIR/src/face3d/util/my_awing_arch.py"
+if [ -f "$AWING_ARCH" ]; then
+    python3 -c "
+import re
+with open('$AWING_ARCH','r') as f: c=f.read()
+n=re.sub(r'np\.float64(64)+','np.float64',c)
+n=re.sub(r'np\.float(?!\d)','np.float64',n)
+if n!=c: open('$AWING_ARCH','w').write(n); print('Patched my_awing_arch.py')
+" 2>/dev/null || true
+fi
+
 # 5. Gerekli klasörleri oluştur
 echo ""
 echo "📁 Klasörler oluşturuluyor..."
