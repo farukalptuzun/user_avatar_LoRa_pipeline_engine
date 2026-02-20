@@ -182,9 +182,11 @@ class SadTalkerWrapper:
             "--source_image", image_path,
             "--result_dir", os.path.dirname(output_path),
             "--checkpoint_dir", self.checkpoint_path,
-            "--preprocess", "full",  # Full preprocessing
-            "--enhancer", "gfpgan",  # Use GFPGAN for enhancement
-            "--background_enhancer", "realesrgan",  # Background enhancement
+            "--preprocess", "crop",   # Face-only crop (full=paste-back, uygun değil)
+            "--still",                # Orijinal kafa pozunu koru (ön cephe)
+            "--size", str(resolution),  # 512 çözünürlük
+            "--enhancer", "gfpgan",
+            "--background_enhancer", "realesrgan",
         ]
         
         try:
