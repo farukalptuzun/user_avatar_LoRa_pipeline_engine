@@ -52,6 +52,12 @@ This system processes user photos and scripts to create personalized talking ava
                     └─────────────┘
 ```
 
+## Quick Start
+
+Sıfırdan klonlama ve kurulum için → **[CLEAN_SETUP.md](CLEAN_SETUP.md)** adımlarını izleyin.
+
+---
+
 ## Prerequisites
 
 - Python 3.10+
@@ -86,6 +92,40 @@ This system processes user photos and scripts to create personalized talking ava
    ```bash
    docker-compose exec api python -c "from app.api.dependencies import init_db; init_db()"
    ```
+
+### RunPod Deployment (Recommended for GPU)
+
+1. **Create RunPod Pod**
+   - Base Image: `pytorch/pytorch:2.1.1-cuda11.8-cudnn8-runtime`
+   - Container Disk: Minimum 50GB
+   - GPU: RTX 3090 / A100 / A6000 (24GB+ VRAM recommended)
+
+2. **Set Environment Variables** in RunPod template:
+   ```
+   MONGODB_URI=mongodb+srv://user:pass@cluster.mongodb.net/
+   MONGODB_DB_NAME=lora_avatar
+   REDIS_URL=rediss://default:XXXX@xxx.upstash.io:6379
+   CELERY_BROKER_URL=rediss://default:XXXX@xxx.upstash.io:6379
+   CELERY_RESULT_BACKEND=rediss://default:XXXX@xxx.upstash.io:6379
+   ELEVENLABS_API_KEY=your_key_here
+   NGROK_AUTHTOKEN=your_ngrok_token (optional)
+   START_CELERY_WORKER=true
+   ```
+
+3. **Set Start Command**:
+   ```bash
+   cd /workspace && git clone https://github.com/YOUR_USERNAME/user_avatar_LoRa_pipeline_engine.git && cd user_avatar_LoRa_pipeline_engine && chmod +x start.sh && ./start.sh
+   ```
+
+4. **Expose Ports**: `8000` (API), `4040` (Ngrok web UI)
+
+5. **After startup**, check logs for Ngrok public URL:
+   ```bash
+   tail -f /workspace/ngrok.log
+   # Or visit: http://localhost:4040
+   ```
+
+See `RUNPOD_SETUP.md` for detailed RunPod setup instructions.
 
 ### Manual Installation
 
@@ -385,3 +425,24 @@ mypy app/
 ## Support
 
 [Add support contact information here]
+
+
+Redis
+# 1. Redis kur
+apt-get update && apt-get install -y redis-server
+
+# 2. Arka planda başlat
+redis-server --daemonize yes
+
+# 3. Kontrol et
+redis-cli ping
+# Cevap: PONG
+
+# Celery worker'ı başlat (gpu + default kuyruklarını dinlesin)
+celery -A app.queue.celery_app worker --loglevel=info --queues=gpu,default,celery --concurrency=1
+
+
+Seçenek 1: SadTalker'ı RunPod'da kurun (önerilen)
+RunPod terminalinde:
+requirem
+cd /workspacegit clone https://github.com/OpenTalker/SadTalker.gitcd SadTalker# Bağımlılıkları yüklepip install -r requirements.txt# Checkpoint'leri indir (gerekirse)# mkdir -p checkpoints# wget -O checkpoints/checkpoint.tar [URL]
